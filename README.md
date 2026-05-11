@@ -117,6 +117,8 @@ Two-step process:
 | Auth | OAuth Client Credentials / OAuth 3LO / API Key / **AWS SigV4** |
 | URL format | Full path: `https://mcp.example.com/v1/mcp` |
 
+> 💡 **Private Connection ≠ no auth.** Private Connection (via VPC Lattice) solves network reachability only. Authentication (OAuth/API Key/SigV4) is still required independently. If using OAuth with Private Connection, the token exchange endpoint must also be routable through the same connection.
+
 ```mermaid
 graph LR
     subgraph "Agent Space"

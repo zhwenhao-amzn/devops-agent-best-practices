@@ -117,6 +117,8 @@ graph TB
 | Auth | OAuth Client Credentials / OAuth 3LO / API Key / **AWS SigV4** |
 | URL 格式 | 完整路径：`https://mcp.example.com/v1/mcp` |
 
+> 💡 **Private Connection ≠ 免认证。** Private Connection（通过 VPC Lattice）仅解决网络可达性问题。认证（OAuth/API Key/SigV4）仍然独立需要。若使用 OAuth + Private Connection，token exchange endpoint 也必须通过同一个 connection 可达。
+
 ```mermaid
 graph LR
     subgraph "Agent Space"
