@@ -27,6 +27,18 @@ Design your Agent Space boundaries the same way you design on-call responsibilit
 2. **Shared Services / NOC** — Dedicated Agent Space scoped to shared infrastructure (DB, networking, monitoring)
 3. **Enterprise Scale (100+ apps)** — IaC templates (CDK/Terraform) + CI/CD auto-deploy Agent Spaces per application team
 
+## 📐 Architecture Diagrams
+
+See [docs/architecture.md](docs/architecture.md) for detailed Mermaid diagrams covering:
+
+1. **Agent Space Design** — On-Call boundary pattern (Prod vs Non-Prod)
+2. **Reactive Pattern** — AMG Alert → SNS → Lambda → DevOps Agent
+3. **Proactive Pattern** — EventBridge Scheduler → Scheduled Investigation
+4. **MCP Server Integration** — Public HTTPS facade for VPC resources
+5. **Self-hosted Grafana** — Direct Webhook (zero Lambda)
+6. **EventBridge Bidirectional** — Inbound triggers + Outbound events
+7. **Cross-Team Investigation** — Shared resource access + escalation
+
 ## 🔐 IAM & Security
 
 - **Two distinct IAM roles required:**

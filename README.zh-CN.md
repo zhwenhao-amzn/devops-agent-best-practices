@@ -27,6 +27,18 @@
 2. **Shared Services / NOC** — 专属 Agent Space，范围限定在共享基础设施（DB、网络、监控）
 3. **企业规模（100+ 应用）** — IaC 模板（CDK/Terraform）+ CI/CD 自动部署每个应用团队的 Agent Space
 
+## 📐 架构图
+
+详见 [docs/architecture.md](docs/architecture.md)，包含以下 Mermaid 图表：
+
+1. **Agent Space 设计** — On-Call 边界模式（Prod vs Non-Prod）
+2. **Reactive 模式** — AMG Alert → SNS → Lambda → DevOps Agent
+3. **Proactive 模式** — EventBridge Scheduler → 定时调查
+4. **MCP Server 集成** — VPC 资源的 Public HTTPS facade
+5. **Self-hosted Grafana** — 直接 Webhook（零 Lambda）
+6. **EventBridge 双向** — Inbound 触发 + Outbound 事件
+7. **跨团队调查** — Shared resource access + escalation
+
 ## 🔐 IAM 与安全性
 
 - **需要两组不同的 IAM role：**
