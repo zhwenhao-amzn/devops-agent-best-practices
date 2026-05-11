@@ -187,4 +187,5 @@ payment-service 有高錯誤率。檢查 Prometheus 過去 2 小時的錯誤率�
 - [Amazon Managed Grafana — Service Accounts](https://docs.aws.amazon.com/grafana/latest/userguide/service-accounts.html)
 - [grafana/mcp-grafana (GitHub)](https://github.com/grafana/mcp-grafana)
 - [aws-samples/sample-aws-devops-agent-ecs-grafana-mcp (GitHub)](https://github.com/aws-samples/sample-aws-devops-agent-ecs-grafana-mcp)
-- [AWS Blog — Integrating Grafana with DevOps Agent](https://aws.amazon.com/blogs/devops/integrating-grafana-with-aws-devops-agent/)
+- [AWS Blog — Announcing GA of AWS DevOps Agent](https://aws.amazon.com/blogs/mt/announcing-general-availability-of-aws-devops-agent/)
+- [Connecting Grafana（官方文件）](https://docs.aws.amazon.com/devopsagent/latest/userguide/connecting-telemetry-sources-connecting-grafana.html)
