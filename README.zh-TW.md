@@ -129,15 +129,15 @@ graph LR
         MCP1[MCP Server<br/>Public HTTPS]
     end
 
-    subgraph "VPC (Private)"
-        PC[Private Connection]
+    subgraph "VPC (Private via VPC Lattice)"
+        PC[Private Connection<br/>Resource Gateway + ENIs]
         MCP2[MCP Server<br/>VPC-hosted]
         OS[OpenSearch<br/>Cluster]
         DB[(Custom DB)]
     end
 
-    DA -->|HTTPS + OAuth/API Key/SigV4| MCP1
-    DA -->|Private Connection| PC
+    DA -->|Public + Auth| MCP1
+    DA -->|Private Connection + Auth| PC
     PC --> MCP2
     MCP2 --> OS
     MCP2 --> DB
