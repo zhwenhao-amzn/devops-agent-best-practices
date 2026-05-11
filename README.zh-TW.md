@@ -256,6 +256,7 @@ sequenceDiagram
 | [devops-agent-webhook-lab](https://github.com/zhwenhao-amzn/devops-agent-webhook-lab) | 端到端 webhook 整合模式：AMG Alert → SNS → Lambda → DevOps Agent、排程式主動調查、AI agent 呼叫用 MCP Tool |
 | [mcp-server-demo](https://github.com/zhwenhao-amzn/mcp-server-demo) | MCP server 實作 demo，擴展 DevOps Agent 自訂資料來源 |
 | [opensearch-mcp-server-for-devops-agent](https://github.com/zhwenhao-amzn/opensearch-mcp-server-for-devops-agent) | OpenSearch MCP server，透過 API Gateway + Cognito OAuth 2.1 讓 DevOps Agent 查詢 VPC-hosted OpenSearch 叢集 |
+| [grafana-integration](grafana-integration/) | 內建 Grafana 整合設定（50+ tools）、AMG token 自動輪換（EventBridge + Lambda）、何時使用自訂 Grafana MCP server 指引 |
 
 ## 📚 官方資源
 

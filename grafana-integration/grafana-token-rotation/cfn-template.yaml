@@ -1,0 +1,218 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Auto-rotate AMG Service Account Token for DevOps Agent Grafana integration
+
+Parameters:
+  GrafanaWorkspaceId:
+    Type: String
+    Default: g-c702c721da
+  GrafanaEndpoint:
+    Type: String
+    Default: https://g-c702c721da.grafana-workspace.us-east-1.amazonaws.com
+  GrafanaServiceAccountId:
+    Type: Number
+    Default: 16
+  RotationIntervalDays:
+    Type: Number
+    Default: 25
+    Description: Rotate token every N days (AMG max is 30)
+
+Resources:
+  TokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: devops-agent/grafana-token
+      Description: Stores Grafana SA token and DevOps Agent service ID for rotation
+
+  RotationFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: rotation-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:UpdateSecret
+                Resource: !Ref TokenSecret
+              - Effect: Allow
+                Action:
+                  - grafana:CreateWorkspaceServiceAccountToken
+                  - grafana:DeleteWorkspaceServiceAccountToken
+                Resource: !Sub arn:aws:grafana:${AWS::Region}:${AWS::AccountId}:/workspaces/${GrafanaWorkspaceId}/*
+              - Effect: Allow
+                Action:
+                  - devops-agent:ListServices
+                  - devops-agent:RegisterService
+                  - devops-agent:DeregisterService
+                  - devops-agent:ListAssociations
+                  - devops-agent:DisassociateService
+                  - devops-agent:AssociateService
+                Resource: '*'
+
+  RotationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: grafana-token-rotation
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 120
+      Role: !GetAtt RotationFunctionRole.Arn
+      Environment:
+        Variables:
+          SECRET_ARN: !Ref TokenSecret
+          GRAFANA_WORKSPACE_ID: !Ref GrafanaWorkspaceId
+          GRAFANA_ENDPOINT: !Ref GrafanaEndpoint
+          GRAFANA_SA_ID: !Ref GrafanaServiceAccountId
+      Code:
+        ZipFile: |
+          import boto3, json, os, time
+
+          sm = boto3.client('secretsmanager')
+          grafana = boto3.client('grafana')
+
+          def get_devops_client():
+              """Try to create devops-agent client, return None if not available"""
+              try:
+                  return boto3.client('devops-agent')
+              except Exception:
+                  return None
+
+          def handler(event, context):
+              secret_arn = os.environ['SECRET_ARN']
+              ws_id = os.environ['GRAFANA_WORKSPACE_ID']
+              endpoint = os.environ['GRAFANA_ENDPOINT']
+              sa_id = int(os.environ['GRAFANA_SA_ID'])
+
+              # Load current state
+              try:
+                  secret = json.loads(sm.get_secret_value(SecretId=secret_arn)['SecretString'])
+              except Exception:
+                  secret = {}
+
+              old_token_id = secret.get('grafanaTokenId')
+              old_service_id = secret.get('devopsAgentServiceId')
+
+              # Step 1: Create new Grafana SA token
+              ts = int(time.time())
+              new_token = grafana.create_workspace_service_account_token(
+                  workspaceId=ws_id,
+                  serviceAccountId=sa_id,
+                  name=f'devops-agent-{ts}',
+                  secondsToLive=30 * 86400  # 30 days
+              )
+              new_token_value = new_token['serviceAccountToken']['key']
+              new_token_id = new_token['serviceAccountToken']['id']
+              print(f"Created new token id={new_token_id}")
+
+              # Step 2: Update DevOps Agent registration
+              da = get_devops_client()
+              new_service_id = None
+
+              if da and old_service_id:
+                  try:
+                      # Find and disassociate from agent spaces
+                      assocs = da.list_associations(serviceId=old_service_id).get('associations', [])
+                      for a in assocs:
+                          da.disassociate_service(
+                              serviceId=old_service_id,
+                              agentSpaceId=a['agentSpaceId']
+                          )
+                          print(f"Disassociated from {a['agentSpaceId']}")
+
+                      # Deregister old service
+                      da.deregister_service(serviceId=old_service_id)
+                      print(f"Deregistered old service {old_service_id}")
+
+                      # Register with new token
+                      reg = da.register_service(
+                          service='mcpservergrafana',
+                          serviceDetails={'mcpservergrafana': {
+                              'name': 'grafana',
+                              'endpoint': endpoint,
+                              'authorizationConfig': {
+                                  'bearerToken': {
+                                      'tokenName': f'grafana-sa-{ts}',
+                                      'tokenValue': new_token_value
+                                  }
+                              }
+                          }}
+                      )
+                      new_service_id = reg['serviceId']
+                      print(f"Registered new service {new_service_id}")
+
+                      # Re-associate to agent spaces
+                      for a in assocs:
+                          da.associate_service(
+                              serviceId=new_service_id,
+                              agentSpaceId=a['agentSpaceId']
+                          )
+                          print(f"Re-associated to {a['agentSpaceId']}")
+
+                  except Exception as e:
+                      print(f"DevOps Agent update failed: {e}")
+                      print("Token rotated in Grafana but DevOps Agent needs manual re-registration")
+              else:
+                  print("DevOps Agent SDK not available or no existing service - skipping registration update")
+
+              # Step 3: Delete old Grafana token
+              if old_token_id:
+                  try:
+                      grafana.delete_workspace_service_account_token(
+                          workspaceId=ws_id,
+                          serviceAccountId=sa_id,
+                          tokenId=str(old_token_id)
+                      )
+                      print(f"Deleted old token {old_token_id}")
+                  except Exception as e:
+                      print(f"Failed to delete old token: {e}")
+
+              # Step 4: Update secret
+              sm.update_secret(
+                  SecretId=secret_arn,
+                  SecretString=json.dumps({
+                      'grafanaTokenValue': new_token_value,
+                      'grafanaTokenId': new_token_id,
+                      'devopsAgentServiceId': new_service_id or old_service_id,
+                      'rotatedAt': ts
+                  })
+              )
+              print("Secret updated. Rotation complete.")
+              return {'status': 'ok', 'newTokenId': new_token_id, 'newServiceId': new_service_id}
+
+  RotationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: grafana-token-rotation-schedule
+      Description: !Sub Rotate Grafana SA token every ${RotationIntervalDays} days
+      ScheduleExpression: !Sub rate(${RotationIntervalDays} days)
+      State: ENABLED
+      Targets:
+        - Id: rotation-lambda
+          Arn: !GetAtt RotationFunction.Arn
+
+  RotationPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RotationFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RotationSchedule.Arn
+
+Outputs:
+  SecretArn:
+    Value: !Ref TokenSecret
+  LambdaArn:
+    Value: !GetAtt RotationFunction.Arn
+  ScheduleRule:
+    Value: !Ref RotationSchedule

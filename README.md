@@ -256,6 +256,7 @@ sequenceDiagram
 | [devops-agent-webhook-lab](https://github.com/zhwenhao-amzn/devops-agent-webhook-lab) | End-to-end webhook integration patterns: AMG Alert → SNS → Lambda → DevOps Agent, proactive scheduled investigations, and MCP Tool for AI agent invocation |
 | [mcp-server-demo](https://github.com/zhwenhao-amzn/mcp-server-demo) | MCP server implementation demo for extending DevOps Agent with custom data sources |
 | [opensearch-mcp-server-for-devops-agent](https://github.com/zhwenhao-amzn/opensearch-mcp-server-for-devops-agent) | OpenSearch MCP server enabling DevOps Agent to query VPC-hosted OpenSearch clusters via API Gateway + Cognito OAuth 2.1 |
+| [grafana-integration](grafana-integration/) | Built-in Grafana integration setup (50+ tools), AMG token rotation automation (EventBridge + Lambda), and guidance on when to use custom Grafana MCP server |
 
 ## 📚 Official Resources
 
