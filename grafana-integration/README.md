@@ -1,5 +1,7 @@
 # Integrating AWS DevOps Agent with Amazon Managed Grafana
 
+> 📖 [English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md)
+
 ## 1. Overview
 
 AWS DevOps Agent provides **built-in Grafana integration** (GA March 2026) through an AWS-hosted [grafana/mcp-grafana](https://github.com/grafana/mcp-grafana) MCP server. This integration is read-only and supports:
