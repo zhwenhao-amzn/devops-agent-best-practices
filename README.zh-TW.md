@@ -21,23 +21,65 @@
 | 緊耦合微服務（同一 resolver group） | 單一 Agent Space |
 | 跨帳號 monolith | 一個 Agent Space + cross-account access |
 
+```mermaid
+graph TB
+    subgraph "Agent Space: EcommerceProd"
+        direction TB
+        AS1[Agent Space Role<br/>AIOpsAssistantPolicy]
+        A1[Account 111<br/>Frontend]
+        A2[Account 222<br/>API + Lambda]
+        A3[Account 333<br/>RDS + DynamoDB]
+    end
+
+    subgraph "Agent Space: EcommerceNonProd"
+        direction TB
+        AS2[Agent Space Role]
+        A4[Account 444<br/>Staging]
+        A5[Account 555<br/>Development]
+    end
+
+    OC1[Prod On-Call Team] --> AS1
+    OC2[Non-Prod On-Call Team] --> AS2
+
+    style AS1 fill:#ff9900,color:#fff
+    style AS2 fill:#ff9900,color:#fff
+    style OC1 fill:#232f3e,color:#fff
+    style OC2 fill:#232f3e,color:#fff
+```
+
 ### 常見模式
 
 1. **跨團隊調查** — 各團隊擁有自己的 Agent Space + shared resource account 的 read-only access + 一致的 tagging（`app-id`）+ runbook escalation
 2. **Shared Services / NOC** — 專屬 Agent Space，範圍限定在共享基礎設施（DB、網路、監控）
 3. **企業規模（100+ 應用）** — IaC 模板（CDK/Terraform）+ CI/CD 自動部署每個應用團隊的 Agent Space
 
-## 📐 架構圖
+```mermaid
+graph TB
+    subgraph "Team A Agent Space"
+        ASA[Agent Space A<br/>Frontend Services]
+        RA[Read-Only Access] -.-> Shared
+    end
 
-詳見 [docs/architecture.md](docs/architecture.md)，包含以下 Mermaid 圖表：
+    subgraph "Team B Agent Space"
+        ASB[Agent Space B<br/>Backend Services]
+        RB[Read-Only Access] -.-> Shared
+    end
 
-1. **Agent Space 設計** — On-Call 邊界模式（Prod vs Non-Prod）
-2. **Reactive 模式** — AMG Alert → SNS → Lambda → DevOps Agent
-3. **Proactive 模式** — EventBridge Scheduler → 排程調查
-4. **MCP Server 整合** — VPC 資源的 Public HTTPS facade
-5. **Self-hosted Grafana** — 直接 Webhook（零 Lambda）
-6. **EventBridge 雙向** — Inbound 觸發 + Outbound 事件
-7. **跨團隊調查** — Shared resource access + escalation
+    subgraph "Shared Resources"
+        Shared[Shared DB / Network<br/>tag: app-id]
+    end
+
+    subgraph "Escalation"
+        RK[Runbook] --> Slack[Slack Channel]
+    end
+
+    ASA --> RK
+    ASB --> RK
+
+    style ASA fill:#ff9900,color:#fff
+    style ASB fill:#ff9900,color:#fff
+    style Shared fill:#3f8624,color:#fff
+```
 
 ## 🔐 IAM 與安全性
 
@@ -74,6 +116,32 @@
 | Auth | OAuth 2.0 或 API key |
 | URL 格式 | 完整路徑：`https://mcp.example.com/v1/mcp` |
 
+```mermaid
+graph LR
+    subgraph "Agent Space"
+        DA[DevOps Agent]
+    end
+
+    subgraph "Public Internet"
+        MCP1[MCP Server<br/>OpenSearch<br/>via API GW + Cognito]
+        MCP2[MCP Server<br/>Custom Telemetry]
+    end
+
+    subgraph "VPC (Private)"
+        OS[OpenSearch<br/>Cluster]
+        DB[(Custom DB)]
+    end
+
+    DA -->|HTTPS + OAuth 2.0| MCP1
+    DA -->|HTTPS + API Key| MCP2
+    MCP1 -->|VPC Link| OS
+    MCP2 -->|VPC Link| DB
+
+    style DA fill:#ff9900,color:#fff
+    style MCP1 fill:#527fff,color:#fff
+    style MCP2 fill:#527fff,color:#fff
+```
+
 ## 🚀 觸發方式
 
 AWS DevOps Agent 有 **3 種觸發方式**：
@@ -94,6 +162,39 @@ Headers: x-amzn-event-timestamp, x-amzn-event-signature
 
 **Payload 欄位：** `eventType`、`incidentId`（dedup key）、`action`、`priority`、`title`、`description`、`service`、`timestamp`、`data.metadata`
 
+### Reactive 模式 — AMG Alert → DevOps Agent
+
+```mermaid
+sequenceDiagram
+    participant CW as CloudWatch<br/>Metrics
+    participant AMG as Amazon Managed<br/>Grafana
+    participant SNS as SNS Topic
+    participant Lambda as Lambda<br/>(HMAC Sign)
+    participant DA as DevOps Agent<br/>Webhook
+    participant Slack as Slack
+
+    CW->>AMG: Metric breach
+    AMG->>SNS: Alert (messageFormat:json)
+    SNS->>Lambda: SNS notification
+    Lambda->>Lambda: Format payload + HMAC-SHA256 sign
+    Lambda->>DA: POST /webhook/generic/{id}<br/>x-amzn-event-signature
+    DA->>DA: Investigate (logs, metrics, traces, code)
+    DA->>Slack: Investigation results + follow-up options
+```
+
+### Self-hosted Grafana — 直接 Webhook（零 Lambda）
+
+```mermaid
+sequenceDiagram
+    participant G as Self-hosted<br/>Grafana
+    participant DA as DevOps Agent<br/>Webhook
+
+    G->>G: Alert fires
+    G->>G: Notification Template<br/>(devops-agent-payload + HMAC)
+    G->>DA: POST /webhook/generic/{id}<br/>Direct Webhook Contact Point
+    DA->>DA: Investigate
+```
+
 ### 去重複行為
 
 - Agent 以 `incidentId` 做去重複 — 相同 ID 會連結到既有調查
@@ -104,6 +205,43 @@ Headers: x-amzn-event-timestamp, x-amzn-event-signature
 
 - **Inbound：** 外部事件 → Lambda → HMAC Webhook → 觸發調查
 - **Outbound：** Source `aws.aidevops` → 事件：`Completed` / `Failed` / `TimedOut` → 下游動作
+
+```mermaid
+graph LR
+    subgraph Inbound
+        EXT[External Events] --> L1[Lambda] --> WH[HMAC Webhook]
+    end
+
+    WH --> DA[DevOps Agent]
+
+    subgraph Outbound
+        DA --> EB[EventBridge<br/>source: aws.aidevops]
+        EB --> |Completed| ACT1[Slack Notification]
+        EB --> |Failed| ACT2[PagerDuty Escalation]
+        EB --> |TimedOut| ACT3[Auto-Retry Lambda]
+    end
+
+    style DA fill:#ff9900,color:#fff
+    style EB fill:#e7157b,color:#fff
+```
+
+### Proactive 模式 — 排程調查
+
+```mermaid
+sequenceDiagram
+    participant EB as EventBridge<br/>Scheduler
+    participant Lambda as Lambda<br/>(HMAC Sign)
+    participant DA as DevOps Agent<br/>Webhook
+    participant EBOut as EventBridge<br/>(aws.aidevops)
+    participant Report as Report<br/>Generator
+
+    EB->>Lambda: Cron trigger (daily/weekly)
+    Lambda->>Lambda: Build payload + HMAC sign
+    Lambda->>DA: POST /webhook/generic/{id}
+    DA->>DA: Investigate with Custom Skill
+    DA->>EBOut: Event: Completed
+    EBOut->>Report: Generate optimization report
+```
 
 ## 🧪 實作 Lab 與範例
 
