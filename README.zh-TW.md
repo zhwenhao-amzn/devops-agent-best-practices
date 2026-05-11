@@ -109,11 +109,12 @@ graph TB
 
 | 需求 | 說明 |
 |------|------|
-| Endpoint | **必須是 publicly accessible HTTPS**（VPC-hosted 不支援） |
+| Transport | **Streamable HTTP** transport protocol |
+| Endpoint | Public HTTPS 或 **Private Connection**（VPC-hosted 支援） |
 | Tools | **僅限 read-only**（write operations = prompt injection 風險） |
 | Allowlisting | Account-level 註冊 → Agent Space-level 啟用 |
 | Tool name | 最長 64 字元 |
-| Auth | OAuth 2.0 或 API key |
+| Auth | OAuth Client Credentials / OAuth 3LO / API Key / **AWS SigV4** |
 | URL 格式 | 完整路徑：`https://mcp.example.com/v1/mcp` |
 
 ```mermaid
@@ -123,23 +124,26 @@ graph LR
     end
 
     subgraph "Public Internet"
-        MCP1[MCP Server<br/>OpenSearch<br/>via API GW + Cognito]
-        MCP2[MCP Server<br/>Custom Telemetry]
+        MCP1[MCP Server<br/>Public HTTPS]
     end
 
     subgraph "VPC (Private)"
+        PC[Private Connection]
+        MCP2[MCP Server<br/>VPC-hosted]
         OS[OpenSearch<br/>Cluster]
         DB[(Custom DB)]
     end
 
-    DA -->|HTTPS + OAuth 2.0| MCP1
-    DA -->|HTTPS + API Key| MCP2
-    MCP1 -->|VPC Link| OS
-    MCP2 -->|VPC Link| DB
+    DA -->|HTTPS + OAuth/API Key/SigV4| MCP1
+    DA -->|Private Connection| PC
+    PC --> MCP2
+    MCP2 --> OS
+    MCP2 --> DB
 
     style DA fill:#ff9900,color:#fff
     style MCP1 fill:#527fff,color:#fff
     style MCP2 fill:#527fff,color:#fff
+    style PC fill:#3f8624,color:#fff
 ```
 
 ## 🚀 觸發方式

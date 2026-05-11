@@ -109,11 +109,12 @@ Two-step process:
 
 | Requirement | Detail |
 |-------------|--------|
-| Endpoint | **Publicly accessible HTTPS** (VPC-hosted NOT supported) |
+| Transport | **Streamable HTTP** transport protocol |
+| Endpoint | Public HTTPS or **Private Connection** (VPC-hosted supported) |
 | Tools | **Read-only only** (write operations = prompt injection risk) |
 | Allowlisting | Account-level register → Agent Space-level enable |
 | Tool name | Max 64 characters |
-| Auth | OAuth 2.0 or API key |
+| Auth | OAuth Client Credentials / OAuth 3LO / API Key / **AWS SigV4** |
 | URL format | Full path: `https://mcp.example.com/v1/mcp` |
 
 ```mermaid
@@ -123,23 +124,26 @@ graph LR
     end
 
     subgraph "Public Internet"
-        MCP1[MCP Server<br/>OpenSearch<br/>via API GW + Cognito]
-        MCP2[MCP Server<br/>Custom Telemetry]
+        MCP1[MCP Server<br/>Public HTTPS]
     end
 
     subgraph "VPC (Private)"
+        PC[Private Connection]
+        MCP2[MCP Server<br/>VPC-hosted]
         OS[OpenSearch<br/>Cluster]
         DB[(Custom DB)]
     end
 
-    DA -->|HTTPS + OAuth 2.0| MCP1
-    DA -->|HTTPS + API Key| MCP2
-    MCP1 -->|VPC Link| OS
-    MCP2 -->|VPC Link| DB
+    DA -->|HTTPS + OAuth/API Key/SigV4| MCP1
+    DA -->|Private Connection| PC
+    PC --> MCP2
+    MCP2 --> OS
+    MCP2 --> DB
 
     style DA fill:#ff9900,color:#fff
     style MCP1 fill:#527fff,color:#fff
     style MCP2 fill:#527fff,color:#fff
+    style PC fill:#3f8624,color:#fff
 ```
 
 ## 🚀 Trigger Methods
